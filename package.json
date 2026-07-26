@@ -10,6 +10,9 @@
     "preview": "vite preview",
     "convert:bible": "node scripts/convert-bible.mjs",
     "validate:bible": "node scripts/validate-bible.mjs",
+    "convert:commentary": "node scripts/convert-commentary.mjs",
+    "translate:commentary": "node scripts/translate-commentary.mjs",
+    "validate:commentary": "node scripts/validate-commentary.mjs",
     "build:verses": "node scripts/build-daily-verses.mjs"
   },
   "dependencies": {

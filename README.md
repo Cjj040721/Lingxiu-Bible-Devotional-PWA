@@ -106,16 +106,21 @@ npx vercel --prod   # 发布到生产域名
 // 合节示例：{ "v": 6, "end": 8, "t": "……" } 表示 6-8 节合并
 ```
 
-## 注解数据格式（预留）
+## 注解数据格式
 
 文件：`public/data/commentary/{bookId}.json`（没有该文件的卷显示「整理中」）
 
 ```jsonc
-{ "bookId": "mat", "source": "马太亨利圣经注释（公有领域）",
+{ "bookId": "mat", "source": "马太亨利简明圣经注释（1706 年原著，公有领域）· AI 中译",
   "chapters": [ { "chapter": 5, "sections": [ { "verses": "1-12", "text": "……" } ] } ] }
 ```
 
-只收录版权已过期的原著与确认公有领域的中译本；V1 优先：新约 + 诗篇 + 箴言。转换脚本骨架：`scripts/convert-commentary.mjs`。
+内容来源：马太亨利简明圣经注释（MHCC，1706 年原著，公有领域）英文原文，经 AI 批量翻译为简体中文（术语对齐和合本）。V1 范围：新约 27 卷 + 诗篇 + 箴言（29 卷 441 章）。
+
+数据管道（详见 `scripts/raw/mhcc/SOURCE.md`）：
+1. `npm run convert:commentary` — 解析 MHCC 英文原文（`scripts/raw/mhcc/src/`）→ 英文中间数据 `scripts/raw/commentary-en/`
+2. `npm run translate:commentary` — 调 OpenAI 兼容接口（默认 DeepSeek）翻译 → `public/data/commentary/`（需 `.env.local` 配置 `OPENAI_API_KEY`，支持断点续传）
+3. `npm run validate:commentary` — 校验章号连续、verses 格式、text 非空、单卷 < 500KB
 
 ## 目录结构
 

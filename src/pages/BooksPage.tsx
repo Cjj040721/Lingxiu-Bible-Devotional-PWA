@@ -29,7 +29,14 @@ export default function BooksPage() {
           <Link to="/" className="text-stone-400 transition hover:text-stone-600 dark:hover:text-stone-200" aria-label="返回首页">
             ←
           </Link>
-          <h1 className="text-lg font-bold text-stone-800 dark:text-stone-100">圣经 · 和合本</h1>
+          <h1 className="flex-1 text-lg font-bold text-stone-800 dark:text-stone-100">圣经 · 和合本</h1>
+          <Link
+            to="/search"
+            aria-label="搜索经文"
+            className="flex items-center gap-1 rounded-lg border border-stone-300 px-2.5 py-1.5 text-xs text-stone-500 transition active:scale-[0.97] dark:border-stone-700 dark:text-stone-400"
+          >
+            🔍 搜索
+          </Link>
         </div>
         <div className="flex rounded-xl bg-stone-200/70 p-1 dark:bg-stone-800">
           {(

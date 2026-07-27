@@ -7,6 +7,7 @@ import ChaptersPage from './pages/ChaptersPage';
 import HomePage from './pages/HomePage';
 import NotesPage from './pages/NotesPage';
 import PlansPage from './pages/PlansPage';
+import PrayerPage from './pages/PrayerPage';
 import ReadPage from './pages/ReadPage';
 import SearchPage from './pages/SearchPage';
 
@@ -18,6 +19,7 @@ import SearchPage from './pages/SearchPage';
  *  /books/:bookId/:chapter 经文阅读
  *  /search                 全文搜索
  *  /plans                  读经计划 + 打卡
+ *  /pray                   祷告（引导/计时/代祷清单）
  *  /notes                  笔记与书签
  *  /ask                    AI 灵修问答
  */
@@ -32,6 +34,7 @@ export default function App() {
           <Route path="/books/:bookId/:chapter" element={<ReadPage />} />
           <Route path="/search" element={<SearchPage />} />
           <Route path="/plans" element={<PlansPage />} />
+          <Route path="/pray" element={<PrayerPage />} />
           <Route path="/notes" element={<NotesPage />} />
           <Route path="/ask" element={<AskPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />

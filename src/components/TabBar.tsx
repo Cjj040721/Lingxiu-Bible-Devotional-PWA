@@ -3,8 +3,8 @@ import { NavLink, useLocation } from 'react-router-dom';
 const TABS = [
   { to: '/', label: '首页', icon: '🏠', end: true },
   { to: '/books', label: '圣经', icon: '📖' },
-  { to: '/search', label: '搜索', icon: '🔍' },
   { to: '/plans', label: '计划', icon: '🗓️' },
+  { to: '/pray', label: '祷告', icon: '🙏' },
   { to: '/notes', label: '笔记', icon: '✏️' },
   { to: '/ask', label: '问AI', icon: '💬' },
 ];

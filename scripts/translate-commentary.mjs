@@ -17,6 +17,8 @@
  *   - 每卷一个缓存文件 scripts/raw/commentary-zh-cache/{bookId}.json，
  *     每批成功即落盘，中断后重跑自动续传（源文本哈希不一致的段会重翻）
  *   - 429/5xx 指数退避重试，请求间固定间隔限速
+ *   - 译文写盘前统一过 replaceEnglishRefs（lib/commentary-refs.mjs），
+ *     把残留英文书卷引用（Joh 3:16 等）替换为中文简称（约 3:16）
  *
  * 运行:
  *   node scripts/translate-commentary.mjs            # 翻译全部 29 卷
@@ -27,6 +29,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { BOOKS_META } from './books-meta.mjs';
+import { replaceEnglishRefs } from './lib/commentary-refs.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const APP_DIR = path.join(__dirname, '..');
@@ -247,7 +250,7 @@ async function main() {
         const translations = await translateBatch(texts);
         batch.forEach((sec, k) => {
           const idx = ch.sections.indexOf(sec);
-          cache[`${ch.chapter}:${idx}`] = { verses: sec.verses, srcHash: shortHash(sec.text), text: translations[k] };
+          cache[`${ch.chapter}:${idx}`] = { verses: sec.verses, srcHash: shortHash(sec.text), text: replaceEnglishRefs(translations[k]) };
         });
         fs.writeFileSync(cacheFile, JSON.stringify(cache));
         await sleep(REQUEST_INTERVAL_MS);
@@ -270,7 +273,8 @@ function writeFinal(bookId, book, cache) {
     sections: ch.sections.map((s, i) => {
       const hit = cache[`${ch.chapter}:${i}`];
       if (!hit || hit.srcHash !== shortHash(s.text)) throw new Error(`${bookId} ${ch.chapter}:${i} 缺少译文，无法产出最终文件`);
-      return { verses: s.verses, text: hit.text };
+      // 旧缓存可能未过引用替换，产出前再跑一遍（幂等）
+      return { verses: s.verses, text: replaceEnglishRefs(hit.text) };
     }),
   }));
   const out = { bookId, source: SOURCE_ZH, chapters };

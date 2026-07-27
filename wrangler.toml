@@ -1,0 +1,23 @@
+# Cloudflare Workers 部署配置（灵修伴读）
+# 一个 Worker 同时承担：① 托管 dist/ 静态前端（Workers Static Assets）② /api/ask AI 问答代理
+# 部署：npm run build && npx wrangler deploy
+# 密钥：npx wrangler secret put OPENAI_API_KEY（和可选的 PASSCODE），不要写进本文件
+
+name = "lingxiu-bible"
+main = "worker/ask.js"
+compatibility_date = "2026-07-27"
+
+# 自有域名绑定（deploy 时自动创建 DNS 记录）
+routes = [
+  { pattern = "lingxiubible.top", custom_domain = true },
+  { pattern = "www.lingxiubible.top", custom_domain = true },
+]
+
+[assets]
+directory = "./dist"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+
+[vars]
+OPENAI_BASE_URL = "https://ws-26ut00r306louzl3.cn-beijing.maas.aliyuncs.com/compatible-mode/v1"
+MODEL = "deepseek-v3.2"

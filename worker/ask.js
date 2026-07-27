@@ -63,7 +63,11 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     if (request.method === 'OPTIONS') return new Response(null, { headers: CORS_HEADERS });
-    if (url.pathname !== '/api/ask') return new Response('Not Found', { status: 404 });
+    if (url.pathname !== '/api/ask') {
+      // 非 API 路径交给 Workers 静态资源（dist/ 前端；SPA 回退在 wrangler.toml 配置）
+      if (env.ASSETS) return env.ASSETS.fetch(request);
+      return new Response('Not Found', { status: 404 });
+    }
     if (request.method !== 'POST') return new Response('Method Not Allowed', { status: 405 });
 
     if (!env.OPENAI_API_KEY) {

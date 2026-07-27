@@ -1,45 +1,50 @@
-# AI 灵修问答代理（Cloudflare Worker）
+# Cloudflare 部署（国内可访问方案）
 
-把 `ask.js` 部署为 Cloudflare Worker，并把前端站点托管在同一域名下（或配置路由让 `/api/ask` 指向本 Worker）。
+Vercel（`*.vercel.app`）在国内无法直接访问，故生产环境改用 Cloudflare：
+**一个 Worker 同时托管前端静态资源（`dist/`）和 `/api/ask` AI 问答代理**，配置见项目根目录 `wrangler.toml`。
 
-## 部署步骤
+> `*.workers.dev` 默认域名在国内同样不可达，必须绑定自有域名（Cloudflare 解析，国内可直连）。
+
+## 一次性准备
+
+1. 注册 Cloudflare 账号（免费）。
+2. 购买域名（阿里云/腾讯云买 .top/.xyz 首年约 ¥10；无需 ICP 备案，因为解析在境外 Cloudflare）。
+3. Cloudflare 后台 → Add site → 输入域名 → 按提示把注册商处的 NS 改为 Cloudflare 分配的两个 NS，等待生效（几分钟到几小时）。
+
+## 部署
 
 ```bash
-cd worker
-npm install -g wrangler   # 如未安装
-wrangler login
+cd app
+npm run build
 
-# 创建 worker（首次）
-wrangler init --yes --type javascript-module lingxiu-ask || true
-# 将 ask.js 内容作为 worker 入口（src/index.js 或直接替换）
+npx wrangler login                      # 首次，浏览器授权
+npx wrangler secret put OPENAI_API_KEY  # 粘贴大模型 Key（不要写进任何文件）
+npx wrangler secret put PASSCODE        # 可选：圈子口令
 
-# 配置密钥与环境变量
-wrangler secret put OPENAI_API_KEY     # 粘贴你的大模型 Key（不要写进任何文件）
-wrangler secret put PASSCODE           # 可选：圈子口令
-# 非密钥变量写在 wrangler.toml 的 [vars] 里：
-# OPENAI_BASE_URL = "https://api.deepseek.com/v1"  # 可选，兼容网关可换
-# MODEL = "deepseek-chat"                          # 可选
-
-wrangler deploy
+npx wrangler deploy
 ```
 
-## 环境变量说明
+然后在 Cloudflare 后台 → Workers & Pages → lingxiu-bible → Settings → Domains & Routes → Add Custom Domain，绑定你的域名（自动配好 DNS）。
 
-| 变量 | 必填 | 说明 |
+## 环境变量
+
+| 变量 | 配置方式 | 说明 |
 |---|---|---|
-| `OPENAI_API_KEY` | ✅ | OpenAI 兼容接口 Key（GPT-4o-mini / Claude Haiku / 国产模型网关均可） |
-| `OPENAI_BASE_URL` | 否 | 默认 `https://api.openai.com/v1`，可改为兼容网关地址 |
-| `MODEL` | 否 | 默认 `gpt-4o-mini` |
-| `PASSCODE` | 否 | 设置后，前端需输入正确口令才能提问（防链接外传被刷） |
-| `DAILY_LIMIT` | 否 | 每 IP 每天限次，默认 20（内存计数；多实例严格限流请接 Workers KV） |
+| `OPENAI_API_KEY` | `wrangler secret put` | ✅ 必填 |
+| `PASSCODE` | `wrangler secret put` | 可选：圈子口令 |
+| `OPENAI_BASE_URL` | `wrangler.toml` [vars] | 已配置为阿里云兼容端点 |
+| `MODEL` | `wrangler.toml` [vars] | 已配置 `deepseek-v3.2` |
+| `DAILY_LIMIT` | `wrangler.toml` [vars] | 可选，每 IP 每天限次，默认 20 |
 
 ## 前端约定
 
 - 前端 POST `/api/ask`，body：`{ question, context: [{ref, text}], passcode? }`
 - `context` 是前端本地检索到的 top N 相关经文（RAG 上下文）
 - 返回 OpenAI 兼容 SSE 流；未配置 Key 时返回 501，前端显示「AI 功能待配置」
+- 非 `/api/ask` 路径由 `env.ASSETS` 服务 `dist/` 静态资源（SPA 回退见 `wrangler.toml`）
 
-## 部署在 Vercel 的替代方案
+## 日常更新
 
-若用 Vercel 托管前端，可在项目根建 `api/ask.js`（Vercel Functions），逻辑相同：
-读取 `process.env.OPENAI_API_KEY` 等环境变量，按上述 Prompt 拼接调用即可。
+```bash
+npm run build && npx wrangler deploy
+```

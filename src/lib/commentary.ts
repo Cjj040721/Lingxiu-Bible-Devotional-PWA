@@ -33,3 +33,36 @@ export function loadCommentary(bookId: string): Promise<CommentaryBook | null> {
   }
   return p;
 }
+
+/* ---------------- 逐节简注（AI 依据 MHCC 生成，每节一条） ---------------- */
+
+export interface VerseNote {
+  /** 节号（合节取起始节） */
+  v: number;
+  note: string;
+}
+
+export interface VerseNotesChapter {
+  chapter: number;
+  notes: VerseNote[];
+}
+
+export interface VerseNotesBook {
+  bookId: string;
+  source: string;
+  chapters: VerseNotesChapter[];
+}
+
+const verseCache = new Map<string, Promise<VerseNotesBook | null>>();
+
+/** 逐节简注：/data/commentary-verses/{bookId}.json（未提供的卷返回 null） */
+export function loadVerseNotes(bookId: string): Promise<VerseNotesBook | null> {
+  let p = verseCache.get(bookId);
+  if (!p) {
+    p = fetch(`${import.meta.env.BASE_URL}data/commentary-verses/${bookId}.json`)
+      .then((r) => (r.ok ? (r.json() as Promise<VerseNotesBook>) : null))
+      .catch(() => null);
+    verseCache.set(bookId, p);
+  }
+  return p;
+}

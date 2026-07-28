@@ -13,7 +13,8 @@
     "convert:commentary": "node scripts/convert-commentary.mjs",
     "translate:commentary": "node scripts/translate-commentary.mjs",
     "validate:commentary": "node scripts/validate-commentary.mjs",
-    "build:verses": "node scripts/build-daily-verses.mjs"
+    "build:verses": "node scripts/build-daily-verses.mjs",
+    "build:verse-notes": "node scripts/build-verse-notes.mjs"
   },
   "dependencies": {
     "react": "^19.2.7",

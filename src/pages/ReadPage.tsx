@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import VerseActionSheet, { type SelectedVerse } from '../components/VerseActionSheet';
 import VerseCardModal from '../components/VerseCardModal';
 import { adjacentChapter, findBookMeta, loadBibleIndex, loadBook, verseLabel, type ChapterRef } from '../lib/bible';
-import { loadCommentary, type CommentaryBook, type CommentarySection } from '../lib/commentary';
+import { loadCommentary, loadVerseNotes, type CommentaryBook, type VerseNotesBook } from '../lib/commentary';
 import { refText } from '../lib/marks';
 import { isTodayAssignment, PLANS, planDayOfDate, planStore, toggleDay } from '../lib/plans';
 import { FONT_SIZES, useSettings } from '../lib/settings';
@@ -24,6 +24,7 @@ export default function ReadPage() {
   const [cardVerse, setCardVerse] = useState<SelectedVerse | null>(null);
   const [showCommentary, setShowCommentary] = useState(false);
   const [commentary, setCommentary] = useState<CommentaryBook | null | undefined>(undefined);
+  const [verseNotes, setVerseNotes] = useState<VerseNotesBook | null | undefined>(undefined);
   // 逐节注解开关（注解内联显示在对应经文下方），状态持久化到 localStorage
   const [verseNotesOn, setVerseNotesOn] = useState(() => localStorage.getItem('lingxiu.read.verseNotes') === '1');
   const toggleVerseNotes = () => {
@@ -43,6 +44,7 @@ export default function ReadPage() {
     setSelected(null);
     setShowCommentary(false);
     setCommentary(undefined);
+    setVerseNotes(undefined);
     Promise.all([loadBibleIndex(), loadBook(bookId)])
       .then(([idx, bk]) => {
         if (cancelled) return;
@@ -56,6 +58,8 @@ export default function ReadPage() {
       .catch((e) => !cancelled && setError(String(e)));
     // 注解随卷一起加载（loadCommentary 内部有 Promise 缓存，底部「本章注解」复用同一份）
     loadCommentary(bookId).then((c) => !cancelled && setCommentary(c));
+    // 逐节简注同步加载（没有该文件的卷返回 null，内联回退到 MHCC 节段）
+    loadVerseNotes(bookId).then((v) => !cancelled && setVerseNotes(v));
     return () => {
       cancelled = true;
     };
@@ -75,26 +79,34 @@ export default function ReadPage() {
     window.scrollTo({ top: 0 });
   }, [bookId, chapter]);
 
-  // 逐节注解映射：把本章每个注解段挂到「覆盖其结束节」的经文条目上（key = 该条目的起始节号）
+  // 逐节注解映射：优先逐节简注（每节一条），没有该数据的书卷回退到 MHCC 节段
+  // 统一挂到「覆盖该节」的经文条目上（key = 条目起始节号）；label 为 null 表示逐节简注
   const inlineNotes = useMemo(() => {
-    const map = new Map<number, CommentarySection[]>();
-    if (!verseNotesOn || !commentary || !chapterData) return map;
-    const commentaryChapter = commentary.chapters.find((c) => c.chapter === chapter);
+    const map = new Map<number, { label: string | null; text: string }[]>();
+    if (!verseNotesOn || !chapterData) return map;
+    const attach = (v: number, item: { label: string | null; text: string }) => {
+      const entry = chapterData.verses.find((e) => v >= e.v && v <= (e.end ?? e.v));
+      const key = entry?.v ?? chapterData.verses[chapterData.verses.length - 1]?.v;
+      if (key == null) return;
+      const list = map.get(key) ?? [];
+      list.push(item);
+      map.set(key, list);
+    };
+    const vnChapter = verseNotes?.chapters.find((c) => c.chapter === chapter);
+    if (vnChapter) {
+      for (const n of vnChapter.notes) attach(n.v, { label: null, text: n.note });
+      return map;
+    }
+    const commentaryChapter = commentary?.chapters.find((c) => c.chapter === chapter);
     if (!commentaryChapter) return map;
     for (const s of commentaryChapter.sections) {
       const m = s.verses.match(/^(\d+)(?:-(\d+))?$/);
       if (!m) continue;
       const endV = parseInt(m[2] ?? m[1], 10);
-      // 结束节落在哪个经文条目内（经文存在合节：v 到 end）
-      const entry = chapterData.verses.find((e) => endV >= e.v && endV <= (e.end ?? e.v));
-      const key = entry?.v ?? chapterData.verses[chapterData.verses.length - 1]?.v;
-      if (key == null) continue;
-      const list = map.get(key) ?? [];
-      list.push(s);
-      map.set(key, list);
+      attach(endV, { label: `📜 ${chapter}章${s.verses}节 · 注解`, text: s.text });
     }
     return map;
-  }, [verseNotesOn, commentary, chapterData, chapter]);
+  }, [verseNotesOn, verseNotes, commentary, chapterData, chapter]);
 
   const prev: ChapterRef | null = index ? adjacentChapter(index, bookId, chapter, 'prev') : null;
   const next: ChapterRef | null = index ? adjacentChapter(index, bookId, chapter, 'next') : null;
@@ -165,6 +177,7 @@ export default function ReadPage() {
   }
 
   const commentaryChapter = commentary?.chapters.find((c) => c.chapter === chapter);
+  const verseNotesChapter = verseNotes?.chapters.find((c) => c.chapter === chapter);
 
   return (
     <div className="mx-auto min-h-dvh max-w-2xl bg-stone-50 dark:bg-stone-950" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
@@ -175,7 +188,7 @@ export default function ReadPage() {
             ←
           </Link>
           <h1 className="min-w-0 flex-1 truncate text-center text-lg font-bold text-stone-800 dark:text-stone-100">{title}</h1>
-          {commentaryChapter && (
+          {(commentaryChapter || verseNotesChapter) && (
             <button
               onClick={toggleVerseNotes}
               className={`shrink-0 rounded-full px-2.5 py-1.5 text-sm font-medium transition ${
@@ -263,18 +276,25 @@ export default function ReadPage() {
                 </sup>
                 {entry.t}
               </p>
-              {/* 逐节注解：内联显示在对应经文下方 */}
-              {inlineNotes.get(entry.v)?.map((s, i) => (
-                <div
-                  key={i}
-                  className="mb-3 ml-5 rounded-lg border-l-2 border-indigo-200 bg-stone-100/70 px-3 py-2 dark:border-indigo-800 dark:bg-stone-900/60"
-                >
-                  <div className="text-xs font-semibold text-indigo-500 dark:text-indigo-400">
-                    📜 {chapter}章{s.verses}节 · 注解
+              {/* 逐节注解：内联显示在对应经文下方（逐节简注 / MHCC 节段） */}
+              {inlineNotes.get(entry.v)?.map((n, i) =>
+                n.label ? (
+                  <div
+                    key={i}
+                    className="mb-3 ml-5 rounded-lg border-l-2 border-indigo-200 bg-stone-100/70 px-3 py-2 dark:border-indigo-800 dark:bg-stone-900/60"
+                  >
+                    <div className="text-xs font-semibold text-indigo-500 dark:text-indigo-400">{n.label}</div>
+                    <p className="mt-1 text-sm leading-6 text-stone-600 dark:text-stone-300">{n.text}</p>
                   </div>
-                  <p className="mt-1 text-sm leading-6 text-stone-600 dark:text-stone-300">{s.text}</p>
-                </div>
-              ))}
+                ) : (
+                  <p
+                    key={i}
+                    className="mb-2 ml-5 border-l-2 border-indigo-100 pl-2.5 text-sm leading-6 text-stone-500 dark:border-indigo-900 dark:text-stone-400"
+                  >
+                    {n.text}
+                  </p>
+                ),
+              )}
             </Fragment>
           ))}
         </div>

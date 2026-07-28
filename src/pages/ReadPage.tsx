@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import VerseActionSheet, { type SelectedVerse } from '../components/VerseActionSheet';
 import VerseCardModal from '../components/VerseCardModal';
@@ -114,20 +114,6 @@ export default function ReadPage() {
     if (ref) navigate(`/books/${ref.bookId}/${ref.chapter}`);
   };
 
-  // 左右滑动翻章
-  const touchStartX = useRef<number | null>(null);
-  const onTouchStart = (e: React.TouchEvent) => {
-    touchStartX.current = e.touches[0].clientX;
-  };
-  const onTouchEnd = (e: React.TouchEvent) => {
-    if (touchStartX.current === null) return;
-    const dx = e.changedTouches[0].clientX - touchStartX.current;
-    touchStartX.current = null;
-    if (Math.abs(dx) < 64) return;
-    if (dx < 0) go(next);
-    else go(prev);
-  };
-
   const fontSize = FONT_SIZES[settings.fontSizeLevel];
   const bookName = meta?.name ?? book?.name ?? '';
   const title = useMemo(() => (bookName ? `${bookName} 第${chapter}章` : ''), [bookName, chapter]);
@@ -180,7 +166,7 @@ export default function ReadPage() {
   const verseNotesChapter = verseNotes?.chapters.find((c) => c.chapter === chapter);
 
   return (
-    <div className="mx-auto min-h-dvh max-w-2xl bg-stone-50 dark:bg-stone-950" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
+    <div className="mx-auto min-h-dvh max-w-2xl bg-stone-50 dark:bg-stone-950">
       {/* 顶部：位置 + 阅读设置 */}
       <header className="sticky top-0 z-10 border-b border-stone-200 bg-stone-50/95 backdrop-blur dark:border-stone-800 dark:bg-stone-950/95">
         <div className="flex items-center gap-2 px-4 py-3">

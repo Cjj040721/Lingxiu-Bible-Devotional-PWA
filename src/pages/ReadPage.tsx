@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import VerseActionSheet, { type SelectedVerse } from '../components/VerseActionSheet';
 import VerseCardModal from '../components/VerseCardModal';
 import { adjacentChapter, findBookMeta, loadBibleIndex, loadBook, verseLabel, type ChapterRef } from '../lib/bible';
-import { loadCommentary, type CommentaryBook } from '../lib/commentary';
+import { loadCommentary, type CommentaryBook, type CommentarySection } from '../lib/commentary';
 import { refText } from '../lib/marks';
 import { isTodayAssignment, PLANS, planDayOfDate, planStore, toggleDay } from '../lib/plans';
 import { FONT_SIZES, useSettings } from '../lib/settings';
@@ -24,6 +24,14 @@ export default function ReadPage() {
   const [cardVerse, setCardVerse] = useState<SelectedVerse | null>(null);
   const [showCommentary, setShowCommentary] = useState(false);
   const [commentary, setCommentary] = useState<CommentaryBook | null | undefined>(undefined);
+  // 逐节注解开关（注解内联显示在对应经文下方），状态持久化到 localStorage
+  const [verseNotesOn, setVerseNotesOn] = useState(() => localStorage.getItem('lingxiu.read.verseNotes') === '1');
+  const toggleVerseNotes = () => {
+    setVerseNotesOn((v) => {
+      localStorage.setItem('lingxiu.read.verseNotes', v ? '0' : '1');
+      return !v;
+    });
+  };
 
   const planState = useStore(planStore);
 
@@ -46,12 +54,14 @@ export default function ReadPage() {
         setBook(bk);
       })
       .catch((e) => !cancelled && setError(String(e)));
+    // 注解随卷一起加载（loadCommentary 内部有 Promise 缓存，底部「本章注解」复用同一份）
+    loadCommentary(bookId).then((c) => !cancelled && setCommentary(c));
     return () => {
       cancelled = true;
     };
   }, [bookId]);
 
-  // 展开注解时按需加载
+  // 展开注解时按需加载（通常随卷加载已完成，这里是兜底）
   useEffect(() => {
     if (showCommentary && commentary === undefined) {
       loadCommentary(bookId).then(setCommentary);
@@ -64,6 +74,27 @@ export default function ReadPage() {
   useEffect(() => {
     window.scrollTo({ top: 0 });
   }, [bookId, chapter]);
+
+  // 逐节注解映射：把本章每个注解段挂到「覆盖其结束节」的经文条目上（key = 该条目的起始节号）
+  const inlineNotes = useMemo(() => {
+    const map = new Map<number, CommentarySection[]>();
+    if (!verseNotesOn || !commentary || !chapterData) return map;
+    const commentaryChapter = commentary.chapters.find((c) => c.chapter === chapter);
+    if (!commentaryChapter) return map;
+    for (const s of commentaryChapter.sections) {
+      const m = s.verses.match(/^(\d+)(?:-(\d+))?$/);
+      if (!m) continue;
+      const endV = parseInt(m[2] ?? m[1], 10);
+      // 结束节落在哪个经文条目内（经文存在合节：v 到 end）
+      const entry = chapterData.verses.find((e) => endV >= e.v && endV <= (e.end ?? e.v));
+      const key = entry?.v ?? chapterData.verses[chapterData.verses.length - 1]?.v;
+      if (key == null) continue;
+      const list = map.get(key) ?? [];
+      list.push(s);
+      map.set(key, list);
+    }
+    return map;
+  }, [verseNotesOn, commentary, chapterData, chapter]);
 
   const prev: ChapterRef | null = index ? adjacentChapter(index, bookId, chapter, 'prev') : null;
   const next: ChapterRef | null = index ? adjacentChapter(index, bookId, chapter, 'next') : null;
@@ -144,6 +175,20 @@ export default function ReadPage() {
             ←
           </Link>
           <h1 className="min-w-0 flex-1 truncate text-center text-lg font-bold text-stone-800 dark:text-stone-100">{title}</h1>
+          {commentaryChapter && (
+            <button
+              onClick={toggleVerseNotes}
+              className={`shrink-0 rounded-full px-2.5 py-1.5 text-sm font-medium transition ${
+                verseNotesOn
+                  ? 'bg-indigo-100 text-indigo-600 dark:bg-indigo-900/60 dark:text-indigo-300'
+                  : 'text-stone-400 hover:bg-stone-200 dark:hover:bg-stone-800'
+              }`}
+              aria-label={verseNotesOn ? '关闭逐节注解' : '开启逐节注解'}
+              title="逐节注解"
+            >
+              注
+            </button>
+          )}
           <button
             onClick={toggleNightMode}
             className="shrink-0 rounded-full p-2 text-lg text-stone-500 transition hover:bg-stone-200 dark:text-stone-300 dark:hover:bg-stone-800"
@@ -204,20 +249,33 @@ export default function ReadPage() {
       <main className="px-5 pt-5 pb-28">
         <div className="font-scripture text-stone-800 dark:text-stone-200" style={{ fontSize, lineHeight: 2 }}>
           {chapterData.verses.map((entry) => (
-            <p
-              key={entry.v}
-              onClick={() => pickVerse(entry)}
-              className={`mb-1 cursor-pointer rounded-lg px-1.5 -mx-1.5 transition-colors ${
-                selected && selected.chapter === chapter && selected.v === entry.v
-                  ? 'bg-indigo-100/70 dark:bg-indigo-900/40'
-                  : 'active:bg-stone-100 dark:active:bg-stone-900'
-              }`}
-            >
-              <sup className="mr-1.5 font-sans text-[0.62em] font-semibold text-indigo-500 select-none dark:text-indigo-400">
-                {verseLabel(entry)}
-              </sup>
-              {entry.t}
-            </p>
+            <Fragment key={entry.v}>
+              <p
+                onClick={() => pickVerse(entry)}
+                className={`mb-1 cursor-pointer rounded-lg px-1.5 -mx-1.5 transition-colors ${
+                  selected && selected.chapter === chapter && selected.v === entry.v
+                    ? 'bg-indigo-100/70 dark:bg-indigo-900/40'
+                    : 'active:bg-stone-100 dark:active:bg-stone-900'
+                }`}
+              >
+                <sup className="mr-1.5 font-sans text-[0.62em] font-semibold text-indigo-500 select-none dark:text-indigo-400">
+                  {verseLabel(entry)}
+                </sup>
+                {entry.t}
+              </p>
+              {/* 逐节注解：内联显示在对应经文下方 */}
+              {inlineNotes.get(entry.v)?.map((s, i) => (
+                <div
+                  key={i}
+                  className="mb-3 ml-5 rounded-lg border-l-2 border-indigo-200 bg-stone-100/70 px-3 py-2 dark:border-indigo-800 dark:bg-stone-900/60"
+                >
+                  <div className="text-xs font-semibold text-indigo-500 dark:text-indigo-400">
+                    📜 {chapter}章{s.verses}节 · 注解
+                  </div>
+                  <p className="mt-1 text-sm leading-6 text-stone-600 dark:text-stone-300">{s.text}</p>
+                </div>
+              ))}
+            </Fragment>
           ))}
         </div>
         <p className="mt-6 text-center text-xs text-stone-400 dark:text-stone-600">—— {bookName} 第{chapter}章 完 ——</p>

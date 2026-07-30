@@ -52,10 +52,14 @@ const MAX_RETRIES = 5;
 
 const SYSTEM_PROMPT = `你是资深的圣经学者，负责为中文基督徒灵修阅读撰写逐节简注。依据材料是马太亨利简明圣经注释（Matthew Henry's Concise Commentary）的中译文，以及所提供的经文本身（和合本）。要求：
 1. 语言：简体中文，基督教灵修语境，行文简洁庄重；术语与中文和合本一致（如「耶和华」「耶稣基督」「圣灵」「恩典」）。
-2. 每节输出一条 note，1-2 句、不超过 80 字。
-3. 严格依据所提供的马太亨利注释内容提炼；注释未论及的节，依据该节经文本身与上下文给出简短中性的解释，不得编造背景知识。
-4. 覆盖输入的每一个节号（合节按起始节号输出一条），不多不少。
-5. 只输出 JSON 对象 {"notes": [{"v": 1, "note": "……"}, ...]}，不要任何额外文字。`;
+2. 每节输出一条 note，长度必须 80-160 字。少于 80 字视为不合格，务必写足；超过 160 字请精简。
+3. 每条 note 的结构：先一句话点出该节核心含义；再提炼马太亨利注释对该节的实质见解（关键词含义、历史/文化背景、神学要点）；最后补一句对今日信徒的属灵应用。
+4. 严格依据所提供的马太亨利注释内容提炼，不得只复述或概括经文大意。注释未论及的节，依据该节经文本身与上下文给出有实质内容的解释（词义、语境、应用），不得编造背景知识，但 80 字的下限要求不变。
+5. 覆盖输入要求范围内的每一个节号（合节按起始节号输出一条），不多不少。
+6. 只输出 JSON 对象 {"notes": [{"v": 1, "note": "……"}, ...]}，不要任何额外文字。
+
+示例（马太福音 5:3 的合格 note）：
+虚心的人有福了，因为天国是他们的。「虚心」即灵里贫穷，指承认自己在神面前的缺乏与不配，放下自义与功德。马太亨利指出，这是恩典国度的入门条件：只有倒空自我的人，才能被基督的义充满。对今日信徒，这意味着每天以谦卑受教、诚实面对自我的心来到神面前，祂必赐下真正的安慰与产业。`;
 
 // ---------- 命令行参数 ----------
 const args = process.argv.slice(2);
@@ -114,17 +118,38 @@ function verseLine(v) {
   return `${v.end ? `${v.v}-${v.end}` : v.v}. ${v.t}`;
 }
 
-/** 拼装一章的用户消息（经文 + MHCC 注解全文） */
-function buildUserContent(chapterVerses, sections) {
+/** 长章拆分阈值：超过此节数则分批生成（避免输出超 max_tokens 被截断成非法 JSON，如诗 119 有 176 节） */
+const SPLIT_VERSES = 60;
+
+/** 拼装一章的用户消息（经文 + MHCC 注解全文）；onlyVerses 存在时只要求输出该批节号的简注 */
+function buildUserContent(chapterVerses, sections, onlyVerses) {
   const verseText = chapterVerses.map(verseLine).join('\n');
   const commentaryText =
     sections.length > 0
       ? sections.map((s) => `【${s.verses}】${s.text}`).join('\n\n')
       : '（本章暂无马太亨利注释，请依据经文本身与上下文给出简短中性的解释。）';
+  const scope = onlyVerses
+    ? `请只为其中第 ${onlyVerses[0].v}-${onlyVerses[onlyVerses.length - 1].v} 节撰写简注（长章分批生成，其余节不用管）`
+    : '请为以下这一章的每一节撰写简注';
   return (
-    `请为以下这一章的每一节撰写简注，返回 JSON 对象 {"notes": [{"v": 1, "note": "……"}, ...]}。\n\n` +
+    `${scope}，返回 JSON 对象 {"notes": [{"v": 1, "note": "……"}, ...]}。\n\n` +
     `【经文】\n${verseText}\n\n【马太亨利简明注释（本章）】\n${commentaryText}`
   );
+}
+
+/** 生成一章的逐节简注：长章自动分批（每批 ≤ SPLIT_VERSES 节，全文作上下文）后合并 */
+async function generateForChapter(ch, sections) {
+  if (ch.verses.length <= SPLIT_VERSES) {
+    return generateChapterNotes(buildUserContent(ch.verses, sections), ch.verses.length);
+  }
+  const all = [];
+  for (let i = 0; i < ch.verses.length; i += SPLIT_VERSES) {
+    const batch = ch.verses.slice(i, i + SPLIT_VERSES);
+    const part = await generateChapterNotes(buildUserContent(ch.verses, sections, batch), batch.length);
+    all.push(...part);
+    if (i + SPLIT_VERSES < ch.verses.length) await sleep(REQUEST_INTERVAL_MS);
+  }
+  return all;
 }
 
 /** 调 OpenAI 兼容 chat/completions，带 429/5xx/非法 JSON 指数退避重试 */
@@ -184,6 +209,14 @@ async function generateChapterNotes(userContent, expectedCount) {
       if (cleaned.length < expectedCount) {
         console.warn(`  ! 返回 ${cleaned.length} 条，少于本章节号数 ${expectedCount}（第${attempt}次尝试）`);
         if (attempt === MAX_RETRIES) return cleaned; // 仍返回，由覆盖校验记录告警
+        await sleep(1000 * 2 ** (attempt - 1));
+        continue;
+      }
+      // 长度校验：超过 1/3 的 note 少于 60 字视为整体偏简，重写（最后一次则接受）
+      const tooShort = cleaned.filter((n) => n.note.length < 60).length;
+      if (tooShort > Math.floor(cleaned.length / 3)) {
+        console.warn(`  ! ${tooShort}/${cleaned.length} 条少于 60 字，偏简（第${attempt}次尝试）`);
+        if (attempt === MAX_RETRIES) return cleaned;
         await sleep(1000 * 2 ** (attempt - 1));
         continue;
       }
@@ -308,7 +341,7 @@ async function main() {
         continue;
       }
       const sections = commentaryByChapter.get(ch.chapter) ?? [];
-      const notes = await generateChapterNotes(buildUserContent(ch.verses, sections), ch.verses.length);
+      const notes = await generateForChapter(ch, sections);
       const missing = findMissing(notes, ch.verses);
       if (missing.length) {
         console.warn(`  ! ${bookId} ${ch.chapter}章缺失节号: ${missing.join(', ')}（--force 可重生成）`);

@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import VerseActionSheet, { type SelectedVerse } from '../components/VerseActionSheet';
 import VerseCardModal from '../components/VerseCardModal';
@@ -25,14 +25,6 @@ export default function ReadPage() {
   const [showCommentary, setShowCommentary] = useState(false);
   const [commentary, setCommentary] = useState<CommentaryBook | null | undefined>(undefined);
   const [verseNotes, setVerseNotes] = useState<VerseNotesBook | null | undefined>(undefined);
-  // 逐节注解开关（注解内联显示在对应经文下方），状态持久化到 localStorage
-  const [verseNotesOn, setVerseNotesOn] = useState(() => localStorage.getItem('lingxiu.read.verseNotes') === '1');
-  const toggleVerseNotes = () => {
-    setVerseNotesOn((v) => {
-      localStorage.setItem('lingxiu.read.verseNotes', v ? '0' : '1');
-      return !v;
-    });
-  };
 
   const planState = useStore(planStore);
 
@@ -79,34 +71,23 @@ export default function ReadPage() {
     window.scrollTo({ top: 0 });
   }, [bookId, chapter]);
 
-  // 逐节注解映射：优先逐节简注（每节一条），没有该数据的书卷回退到 MHCC 节段
-  // 统一挂到「覆盖该节」的经文条目上（key = 条目起始节号）；label 为 null 表示逐节简注
-  const inlineNotes = useMemo(() => {
-    const map = new Map<number, { label: string | null; text: string }[]>();
-    if (!verseNotesOn || !chapterData) return map;
-    const attach = (v: number, item: { label: string | null; text: string }) => {
-      const entry = chapterData.verses.find((e) => v >= e.v && v <= (e.end ?? e.v));
-      const key = entry?.v ?? chapterData.verses[chapterData.verses.length - 1]?.v;
-      if (key == null) return;
-      const list = map.get(key) ?? [];
-      list.push(item);
-      map.set(key, list);
-    };
-    const vnChapter = verseNotes?.chapters.find((c) => c.chapter === chapter);
-    if (vnChapter) {
-      for (const n of vnChapter.notes) attach(n.v, { label: null, text: n.note });
-      return map;
-    }
-    const commentaryChapter = commentary?.chapters.find((c) => c.chapter === chapter);
-    if (!commentaryChapter) return map;
-    for (const s of commentaryChapter.sections) {
+  // 选中节的逐节注解：优先逐节简注，其次 MHCC 节段（旧约等无逐节数据的卷）
+  const selectedNote = useMemo(() => {
+    if (!selected) return undefined;
+    const end = selected.end ?? selected.v;
+    const vnChapter = verseNotes?.chapters.find((c) => c.chapter === selected.chapter);
+    const vn = vnChapter?.notes.find((n) => n.v >= selected.v && n.v <= end);
+    if (vn) return vn.note;
+    const cc = commentary?.chapters.find((c) => c.chapter === selected.chapter);
+    const sec = cc?.sections.find((s) => {
       const m = s.verses.match(/^(\d+)(?:-(\d+))?$/);
-      if (!m) continue;
-      const endV = parseInt(m[2] ?? m[1], 10);
-      attach(endV, { label: `📜 ${chapter}章${s.verses}节 · 注解`, text: s.text });
-    }
-    return map;
-  }, [verseNotesOn, verseNotes, commentary, chapterData, chapter]);
+      if (!m) return false;
+      const a = parseInt(m[1], 10);
+      const b = parseInt(m[2] ?? m[1], 10);
+      return selected.v >= a && selected.v <= b;
+    });
+    return sec?.text ?? null;
+  }, [selected, verseNotes, commentary]);
 
   const prev: ChapterRef | null = index ? adjacentChapter(index, bookId, chapter, 'prev') : null;
   const next: ChapterRef | null = index ? adjacentChapter(index, bookId, chapter, 'next') : null;
@@ -163,7 +144,6 @@ export default function ReadPage() {
   }
 
   const commentaryChapter = commentary?.chapters.find((c) => c.chapter === chapter);
-  const verseNotesChapter = verseNotes?.chapters.find((c) => c.chapter === chapter);
 
   return (
     <div className="mx-auto min-h-dvh max-w-2xl bg-stone-50 dark:bg-stone-950">
@@ -174,20 +154,6 @@ export default function ReadPage() {
             ←
           </Link>
           <h1 className="min-w-0 flex-1 truncate text-center text-lg font-bold text-stone-800 dark:text-stone-100">{title}</h1>
-          {(commentaryChapter || verseNotesChapter) && (
-            <button
-              onClick={toggleVerseNotes}
-              className={`shrink-0 rounded-full px-2.5 py-1.5 text-sm font-medium transition ${
-                verseNotesOn
-                  ? 'bg-indigo-100 text-indigo-600 dark:bg-indigo-900/60 dark:text-indigo-300'
-                  : 'text-stone-400 hover:bg-stone-200 dark:hover:bg-stone-800'
-              }`}
-              aria-label={verseNotesOn ? '关闭逐节注解' : '开启逐节注解'}
-              title="逐节注解"
-            >
-              注
-            </button>
-          )}
           <button
             onClick={toggleNightMode}
             className="shrink-0 rounded-full p-2 text-lg text-stone-500 transition hover:bg-stone-200 dark:text-stone-300 dark:hover:bg-stone-800"
@@ -248,40 +214,20 @@ export default function ReadPage() {
       <main className="px-5 pt-5 pb-28">
         <div className="font-scripture text-stone-800 dark:text-stone-200" style={{ fontSize, lineHeight: 2 }}>
           {chapterData.verses.map((entry) => (
-            <Fragment key={entry.v}>
-              <p
-                onClick={() => pickVerse(entry)}
-                className={`mb-1 cursor-pointer rounded-lg px-1.5 -mx-1.5 transition-colors ${
-                  selected && selected.chapter === chapter && selected.v === entry.v
-                    ? 'bg-indigo-100/70 dark:bg-indigo-900/40'
-                    : 'active:bg-stone-100 dark:active:bg-stone-900'
-                }`}
-              >
-                <sup className="mr-1.5 font-sans text-[0.62em] font-semibold text-indigo-500 select-none dark:text-indigo-400">
-                  {verseLabel(entry)}
-                </sup>
-                {entry.t}
-              </p>
-              {/* 逐节注解：内联显示在对应经文下方（逐节简注 / MHCC 节段） */}
-              {inlineNotes.get(entry.v)?.map((n, i) =>
-                n.label ? (
-                  <div
-                    key={i}
-                    className="mb-3 ml-5 rounded-lg border-l-2 border-indigo-200 bg-stone-100/70 px-3 py-2 dark:border-indigo-800 dark:bg-stone-900/60"
-                  >
-                    <div className="text-xs font-semibold text-indigo-500 dark:text-indigo-400">{n.label}</div>
-                    <p className="mt-1 text-sm leading-6 text-stone-600 dark:text-stone-300">{n.text}</p>
-                  </div>
-                ) : (
-                  <p
-                    key={i}
-                    className="mb-2 ml-5 border-l-2 border-indigo-100 pl-2.5 text-sm leading-6 text-stone-500 dark:border-indigo-900 dark:text-stone-400"
-                  >
-                    {n.text}
-                  </p>
-                ),
-              )}
-            </Fragment>
+            <p
+              key={entry.v}
+              onClick={() => pickVerse(entry)}
+              className={`mb-1 cursor-pointer rounded-lg px-1.5 -mx-1.5 transition-colors ${
+                selected && selected.chapter === chapter && selected.v === entry.v
+                  ? 'bg-indigo-100/70 dark:bg-indigo-900/40'
+                  : 'active:bg-stone-100 dark:active:bg-stone-900'
+              }`}
+            >
+              <sup className="mr-1.5 font-sans text-[0.62em] font-semibold text-indigo-500 select-none dark:text-indigo-400">
+                {verseLabel(entry)}
+              </sup>
+              {entry.t}
+            </p>
           ))}
         </div>
         <p className="mt-6 text-center text-xs text-stone-400 dark:text-stone-600">—— {bookName} 第{chapter}章 完 ——</p>
@@ -342,7 +288,7 @@ export default function ReadPage() {
       </nav>
 
       {/* 选节操作 + 分享卡片 */}
-      <VerseActionSheet verse={selected} onClose={() => setSelected(null)} onShareCard={setCardVerse} />
+      <VerseActionSheet verse={selected} note={selected ? selectedNote : undefined} onClose={() => setSelected(null)} onShareCard={setCardVerse} />
       {cardVerse && (
         <VerseCardModal text={cardVerse.text} refLabel={refText(cardVerse)} onClose={() => setCardVerse(null)} />
       )}

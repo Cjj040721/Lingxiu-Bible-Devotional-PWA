@@ -8,12 +8,14 @@ export interface SelectedVerse extends VerseRef {
 
 interface Props {
   verse: SelectedVerse | null;
+  /** 该节的逐节注解（无数据时为 null） */
+  note?: string | null;
   onClose: () => void;
   onShareCard: (v: SelectedVerse) => void;
 }
 
-/** 点击经文后的操作菜单：复制（带出处）/ 书签 / 写笔记 / 分享卡片 */
-export default function VerseActionSheet({ verse, onClose, onShareCard }: Props) {
+/** 点击经文后的操作菜单：逐节注解 / 复制（带出处）/ 书签 / 写笔记 / 分享卡片 */
+export default function VerseActionSheet({ verse, note, onClose, onShareCard }: Props) {
   const [mode, setMode] = useState<'menu' | 'note'>('menu');
   const [noteText, setNoteText] = useState('');
   const [toast, setToast] = useState<string | null>(null);
@@ -67,7 +69,14 @@ export default function VerseActionSheet({ verse, onClose, onShareCard }: Props)
         <div className="py-6 text-center text-base font-medium text-indigo-700 dark:text-indigo-300">{toast} ✓</div>
       ) : mode === 'menu' ? (
         <div>
-          <p className="font-scripture mb-5 text-[15px] leading-7 text-stone-700 dark:text-stone-300">{verse.text}</p>
+          <p className="font-scripture mb-3 text-[15px] leading-7 text-stone-700 dark:text-stone-300">{verse.text}</p>
+          {/* 逐节注解（点击哪节看哪节） */}
+          <div className="mb-5 rounded-xl border-l-2 border-indigo-200 bg-stone-100/70 px-3 py-2.5 dark:border-indigo-800 dark:bg-stone-900/60">
+            <div className="text-xs font-semibold text-indigo-500 dark:text-indigo-400">📜 本节注解</div>
+            <p className="mt-1 max-h-48 overflow-y-auto text-sm leading-6 text-stone-600 dark:text-stone-300">
+              {note ?? '本卷暂无逐节注解，可查看页面底部的「本章注解」。'}
+            </p>
+          </div>
           <div className="grid grid-cols-2 gap-2">
             <Action onClick={copyVerse} icon="📋" label="复制经文" />
             <Action onClick={saveBookmark} icon="🔖" label="加书签" />

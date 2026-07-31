@@ -14,7 +14,7 @@
  *   "chapters": [ { "chapter": 5, "sections": [ { "verses": "1-12", "text": "……" } ] } ]
  * }
  *
- * 范围: V1 = 新约 27 卷 + 诗篇 + 箴言（29 卷 441 章）
+ * 范围: 全本 66 卷(V1 为新约 27 卷 + 诗篇 + 箴言;CAO-20 起扩充旧约其余 37 卷)
  * 校验: 与 public/data/bible/books/ 的节数交叉核对（首段从 1 开始、末段到该章末节、段间无断档）
  * 运行: node scripts/convert-commentary.mjs
  */
@@ -28,8 +28,16 @@ const SRC_DIR = path.join(__dirname, 'raw', 'mhcc', 'src');
 const OUT_DIR = path.join(__dirname, 'raw', 'commentary-en');
 const BIBLE_DIR = path.join(__dirname, '..', 'public', 'data', 'bible', 'books');
 
-/** V1 范围 29 卷 → 仓库中的书卷目录名 */
+/** 66 卷 → 仓库中的书卷目录名(V1 为新约 27 卷 + 诗篇 + 箴言,CAO-20 扩充旧约其余 37 卷) */
 const BOOK_DIR = {
+  gen: 'genesis', exo: 'exodus', lev: 'leviticus', num: 'numbers', deu: 'deuteronomy',
+  jos: 'joshua', jdg: 'judges', rut: 'ruth', '1sa': '1-samuel', '2sa': '2-samuel',
+  '1ki': '1-kings', '2ki': '2-kings', '1ch': '1-chronicles', '2ch': '2-chronicles',
+  ezr: 'ezra', neh: 'nehemiah', est: 'esther', job: 'job', ecc: 'ecclesiastes',
+  sng: 'song-of-solomon', isa: 'isaiah', jer: 'jeremiah', lam: 'lamentations',
+  eze: 'ezekiel', dan: 'daniel', hos: 'hosea', joe: 'joel', amo: 'amos', oba: 'obadiah',
+  jon: 'jonah', mic: 'micah', nah: 'nahum', hab: 'habakkuk', zep: 'zephaniah',
+  hag: 'haggai', zec: 'zechariah', mal: 'malachi',
   mat: 'matthew', mar: 'mark', luk: 'luke', joh: 'john', act: 'acts',
   rom: 'romans', '1co': '1-corinthians', '2co': '2-corinthians', gal: 'galatians',
   eph: 'ephesians', phi: 'philippians', col: 'colossians',
@@ -54,6 +62,13 @@ const RELABEL = {
   psa: { 116: { '10-19': '10-18' }, 150: { '1-5': '1-6' } }, // 116 篇 KJV 19 节 vs 和合本 18 节（末节合并）；150 篇注解覆盖全篇
   pro: { 14: { 12: '12-13' }, 16: { 9: '9-10', 19: '19-20' }, 22: { 28: '28-29' } },
   '3jo': { 1: { '13-14': '13-15' } },
+  // 旧约（CAO-20，均与 CCEL 版逐处核对：MHCC 对这些章多为整章一块注解，源文件标题节号是 KJV 口径或自身误标，内容覆盖全章）
+  lev: { 15: { '1-23': '1-33' } }, // CCEL 为整章一块；标题误标 1-23
+  jos: { 16: { '1-31': '1-10' } }, // CCEL 为整章一块（兼及 17 章）；标题误标 1-31
+  '1ch': { 21: { '1-30': '1-31' }, 22: { '17-19': '17-18' } }, // KJV 节号口径差异（KJV 21 章 30 节 / 22 章 19 节）
+  '2ch': { 16: { '1-16': '1-14' }, 17: { '1-17': '1-19' }, 27: { '1-27': '1-9' } }, // CCEL 为整章一块；标题节号误标
+  isa: { 58: { '3-12': '3-14' } }, // 3-12 段正文实际论及 13-14 节（安息日），同 太13 类
+  deu: { 13: { '12-18': '12-17' }, 20: { '10-12': '10-20' } }, // 13 章 KJV 18 节 vs 和合本 17 节；20 章 10-12 段正文实际覆盖至 20 节（果树）
 };
 /** 正文清理：mat 13 的 24-30 段开头残留了标题残片「, 36–43 」 */
 const TEXT_FIX = {
@@ -64,6 +79,23 @@ const TEXT_FIX = {
 function chapterFile(dir, bookId, chapter) {
   const name = bookId === 'psa' ? `psalm-${chapter}.md` : `chapter-${chapter}.md`;
   return path.join(SRC_DIR, dir, name);
+}
+
+/**
+ * 整章一块注解的兜底：源文件没有任何「## Verse(s)」节段标题（如 摩 1，CCEL 版同为整章一块），
+ * 去掉 frontmatter 与标题行后，把全文收为「1-末节」一段。
+ */
+function wholeChapterSection(md, maxVerse) {
+  const body = [];
+  let inFrontmatter = false;
+  for (const [i, line] of md.split(/\r?\n/).entries()) {
+    if (i === 0 && line.trim() === '---') { inFrontmatter = true; continue; }
+    if (inFrontmatter) { if (line.trim() === '---') inFrontmatter = false; continue; }
+    if (/^#{1,2} /.test(line)) continue;
+    body.push(line);
+  }
+  const text = body.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+  return text && maxVerse != null ? [{ verses: `1-${maxVerse}`, text }] : [];
 }
 
 /**
@@ -148,7 +180,15 @@ for (const meta of V1_BOOKS) {
   for (let ch = 1; ch <= meta.chapters; ch++) {
     const file = chapterFile(dir, meta.bookId, ch);
     if (!fs.existsSync(file)) throw new Error(`${meta.name} 缺少章文件: ${path.relative(process.cwd(), file)}`);
-    const sections = parseChapterMarkdown(fs.readFileSync(file, 'utf8'), `${meta.bookId} ${ch}`);
+    const md = fs.readFileSync(file, 'utf8');
+    const sections = parseChapterMarkdown(md, `${meta.bookId} ${ch}`);
+    if (!sections.length) {
+      const fallback = wholeChapterSection(md, bibleMaxVerse(meta.bookId, ch));
+      if (fallback.length) {
+        console.log(`  🔧 ${meta.name} 第${ch}章 无节段标题，按整章 ${fallback[0].verses} 收为一段`);
+        sections.push(...fallback);
+      }
+    }
     if (!sections.length) throw new Error(`${meta.name} 第${ch}章 解析不到任何节段`);
 
     // 应用修复表（改标 verses / 清理正文残留）

@@ -25,7 +25,7 @@
  *     仍落盘（可用 --force 重生成该章）
  *
  * 运行:
- *   node scripts/build-verse-notes.mjs              # 生成全部 29 卷
+ *   node scripts/build-verse-notes.mjs              # 生成全部 66 卷
  *   node scripts/build-verse-notes.mjs mat psa      # 只生成指定卷
  *   node scripts/build-verse-notes.mjs mat:5 psa:23 # 只生成指定章（便于试跑/单章重生成）
  *   node scripts/build-verse-notes.mjs --dry-run    # 只打印统计与 token 估算，不调接口
@@ -65,9 +65,7 @@ const SYSTEM_PROMPT = `你是资深的圣经学者，负责为中文基督徒灵
 const args = process.argv.slice(2);
 const DRY_RUN = args.includes('--dry-run');
 const FORCE = args.includes('--force');
-const V1_BOOK_IDS = BOOKS_META.filter((b) => b.testament === 'new' || b.bookId === 'psa' || b.bookId === 'pro').map(
-  (b) => b.bookId,
-);
+const ALL_BOOK_IDS = BOOKS_META.map((b) => b.bookId); // 全本 66 卷(CAO-20 起含旧约)
 const requested = args.filter((a) => !a.startsWith('--'));
 // 支持 mat:5 形式只跑指定章（便于试跑与单章重生成）
 const chapterFilters = new Map(); // bookId -> Set<章号>
@@ -82,13 +80,13 @@ for (const a of requested) {
     requestedBooks.push(a);
   }
 }
-const unknown = requestedBooks.filter((id) => !V1_BOOK_IDS.includes(id));
+const unknown = requestedBooks.filter((id) => !ALL_BOOK_IDS.includes(id));
 if (unknown.length) {
   console.error(`未知书卷ID: ${unknown.join(', ')}`);
-  console.error(`V1 可用: ${V1_BOOK_IDS.join(' ')}`);
+  console.error(`可用: ${ALL_BOOK_IDS.join(' ')}`);
   process.exit(1);
 }
-const targetBooks = requestedBooks.length ? requestedBooks : V1_BOOK_IDS;
+const targetBooks = requestedBooks.length ? requestedBooks : ALL_BOOK_IDS;
 
 // ---------- 环境变量（.env.local 简单解析，不引依赖） ----------
 function loadEnvLocal() {

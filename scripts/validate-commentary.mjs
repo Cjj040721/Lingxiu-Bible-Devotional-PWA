@@ -23,7 +23,7 @@ const DATA_DIR = process.argv[2]
   : path.join(__dirname, 'raw', 'commentary-en');
 const MAX_FILE_BYTES = 500 * 1024;
 
-const V1_BOOKS = BOOKS_META.filter((b) => b.testament === 'new' || b.bookId === 'psa' || b.bookId === 'pro');
+const ALL_BOOKS = BOOKS_META; // 全本 66 卷(CAO-20 起含旧约);缺文件的卷跳过不计失败
 const VERSES_RE = /^\d+(-\d+)?$/;
 
 let passed = 0;
@@ -52,7 +52,7 @@ let totalSections = 0;
 let totalBytes = 0;
 let covered = 0;
 
-for (const meta of V1_BOOKS) {
+for (const meta of ALL_BOOKS) {
   const file = path.join(DATA_DIR, `${meta.bookId}.json`);
   if (!fs.existsSync(file)) {
     console.log(`  - ${meta.name} 缺文件（跳过，未覆盖）`);
@@ -106,7 +106,7 @@ for (const meta of V1_BOOKS) {
 }
 
 console.log('\n================================================');
-console.log(`覆盖: ${covered}/${V1_BOOKS.length}卷  总节段: ${totalSections}  总大小: ${(totalBytes / 1024 / 1024).toFixed(2)}MB`);
+console.log(`覆盖: ${covered}/${ALL_BOOKS.length}卷  总节段: ${totalSections}  总大小: ${(totalBytes / 1024 / 1024).toFixed(2)}MB`);
 console.log(`结果: ${passed} 项通过, ${failed} 项失败`);
 if (failed) {
   console.log('失败项:');

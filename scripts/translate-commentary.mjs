@@ -21,7 +21,7 @@
  *     把残留英文书卷引用（Joh 3:16 等）替换为中文简称（约 3:16）
  *
  * 运行:
- *   node scripts/translate-commentary.mjs            # 翻译全部 29 卷
+ *   node scripts/translate-commentary.mjs            # 翻译全部 66 卷
  *   node scripts/translate-commentary.mjs mat psa    # 只翻译指定卷
  *   node scripts/translate-commentary.mjs --dry-run  # 只打印统计与 token 估算，不调接口
  */
@@ -57,17 +57,15 @@ const SYSTEM_PROMPT = `你是资深的圣经学者与中文译者，负责把马
 const args = process.argv.slice(2);
 const DRY_RUN = args.includes('--dry-run');
 const FORCE = args.includes('--force');
-const V1_BOOK_IDS = BOOKS_META.filter((b) => b.testament === 'new' || b.bookId === 'psa' || b.bookId === 'pro').map(
-  (b) => b.bookId,
-);
+const ALL_BOOK_IDS = BOOKS_META.map((b) => b.bookId); // 全本 66 卷(CAO-20 起含旧约)
 const requested = args.filter((a) => !a.startsWith('--'));
-const unknown = requested.filter((id) => !V1_BOOK_IDS.includes(id));
+const unknown = requested.filter((id) => !ALL_BOOK_IDS.includes(id));
 if (unknown.length) {
   console.error(`未知书卷ID: ${unknown.join(', ')}`);
-  console.error(`V1 可用: ${V1_BOOK_IDS.join(' ')}`);
+  console.error(`可用: ${ALL_BOOK_IDS.join(' ')}`);
   process.exit(1);
 }
-const targetBooks = requested.length ? requested : V1_BOOK_IDS;
+const targetBooks = requested.length ? requested : ALL_BOOK_IDS;
 
 // ---------- 环境变量（.env.local 简单解析，不引依赖） ----------
 function loadEnvLocal() {

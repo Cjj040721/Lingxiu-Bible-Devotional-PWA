@@ -156,11 +156,28 @@ async function translateBatch(texts) {
       try {
         parsed = JSON.parse(content);
       } catch {
-        throw new Error(`模型返回非 JSON: ${content.slice(0, 120)}…`);
+        parsed = null;
       }
-      const translations = parsed.translations;
+      const translations = parsed?.translations;
       if (!Array.isArray(translations) || translations.length !== texts.length) {
-        throw new Error(`译文数量不符: 期望${texts.length} 实际${Array.isArray(translations) ? translations.length : 'N/A'}`);
+        // 模型偶发返回非 JSON 或译文数量不符:按瞬态错误重试(与 429/5xx 同策略)
+        if (attempt === MAX_RETRIES) {
+          if (texts.length > 1) {
+            // 持久性数量不符(模型对特定批次反复拆错):拆半递归翻译后拼接
+            const mid = Math.ceil(texts.length / 2);
+            console.warn(`  ⚠ 批次译文数量持续不符(期望${texts.length})，拆半重试`);
+            const left = await translateBatch(texts.slice(0, mid));
+            const right = await translateBatch(texts.slice(mid));
+            return [...left, ...right];
+          }
+          if (Array.isArray(translations) && translations.length > 0) {
+            console.warn('  ⚠ 单段翻译返回多条译文，取第一条');
+            return [String(translations[0]).trim()];
+          }
+          throw new Error(`译文数量不符: 期望1 实际0（重试${MAX_RETRIES}次仍失败）`);
+        }
+        await sleep(1000 * 2 ** (attempt - 1) + Math.floor(Math.random() * 500));
+        continue;
       }
       return translations.map((t) => String(t).trim());
     }

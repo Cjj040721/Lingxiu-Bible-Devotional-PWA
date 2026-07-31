@@ -103,7 +103,7 @@ npm run build && npx wrangler deploy
   "chapters": [ { "chapter": 5, "sections": [ { "verses": "1-12", "text": "……" } ] } ] }
 ```
 
-内容来源：马太亨利简明圣经注释（MHCC，1706 年原著，公有领域）英文原文，经 AI 批量翻译为简体中文（术语对齐和合本）。V1 范围：新约 27 卷 + 诗篇 + 箴言（29 卷 441 章）。
+内容来源：马太亨利简明圣经注释（MHCC，1706 年原著，公有领域）英文原文，经 AI 批量翻译为简体中文（术语对齐和合本）。覆盖范围：全本 66 卷（V1 为新约 27 卷 + 诗篇 + 箴言，CAO-20 扩充旧约其余 37 卷）。另有 `public/data/commentary-verses/` 逐节简注（依据 MHCC 中译 + 经文由 AI 生成，含义/见解/应用三段式）。
 
 数据管道（详见 `scripts/raw/mhcc/SOURCE.md`）：
 1. `npm run convert:commentary` — 解析 MHCC 英文原文（`scripts/raw/mhcc/src/`）→ 英文中间数据 `scripts/raw/commentary-en/`

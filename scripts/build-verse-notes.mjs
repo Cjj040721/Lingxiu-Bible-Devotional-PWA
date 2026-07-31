@@ -374,7 +374,19 @@ function writeFinal(bookId, bible, bookCacheDir) {
   }
   const chapters = bible.chapters.map((ch) => {
     const { notes } = JSON.parse(fs.readFileSync(path.join(bookCacheDir, `${ch.chapter}.json`), 'utf8'));
-    return { chapter: ch.chapter, notes };
+    // 清洗:模型偶发把合节拆成单节或重复输出同一节号 —— 以和合本节号为准,
+    // 剔除非起始节号与重复节号(保留先出的一条),不补缺失(缺失由生成阶段告警兜底)
+    const want = new Set(ch.verses.map((v) => v.v));
+    const seen = new Set();
+    const clean = [];
+    let dropped = 0;
+    for (const n of notes) {
+      if (!want.has(n.v) || seen.has(n.v)) { dropped++; continue; }
+      seen.add(n.v);
+      clean.push(n);
+    }
+    if (dropped) console.log(`  🧹 ${bookId} 第${ch.chapter}章 清洗重复/合节拆分注 ${dropped} 条`);
+    return { chapter: ch.chapter, notes: clean };
   });
   const out = { bookId, source: SOURCE_ZH, chapters };
   fs.writeFileSync(path.join(OUT_DIR, `${bookId}.json`), JSON.stringify(out));

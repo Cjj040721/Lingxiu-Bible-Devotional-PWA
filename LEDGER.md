@@ -11,6 +11,7 @@
 
 ## DONE
 
+- 2026-07-31 · CAO-20 旧约注解扩充评估:方案已贴 issue 评论。结论:MHCC 旧约 37 卷 748 章全覆盖、双源版权干净;源数据瑕疵 12 处(王下缺 ch1 文件、摩 1 无节段标题、10 章节号口径异常,均可对照 CCEL 修复);成本 ≈$2.4/¥20 内、1-2 工作日;建议三批执行(批 1:创/出/伯/赛/但)。评估只读统计、未调 API、零费用,是否执行待 owner 拍板
 - 2026-07-31 · 文档定版:部署方案只留 Cloudflare(lingxiubible.top),README 部署章节重写、AGENTS.md 边界条目同步;Vercel 方案标记弃用(`vercel.json`/`api/ask.js` 仅存档);owner 确认自用阶段不启用 PASSCODE · 见本次 docs commit
 - 2026-07-31 · CAO-19 试用前自查:build 通过 + validate:bible 36 项全过;Cloudflare 生产(lingxiubible.top)静态资源/SPA 回退/AI 问答流式全链路 200;发现:① `*.vercel.app` 国内不可达,试用链接须用自有域名 ② Worker 未配置 `PASSCODE`,AI 问答暂无口令保护(是否配置由 owner 决定)
 - 2026-07-31 · 仓库补三件套之 AGENTS.md + LEDGER.md,`.gitignore` 补 `.wrangler`(docs commit,见 git log)
@@ -22,5 +23,5 @@
 
 - 小圈子试用:发放链接与圈子口令(口令由 owner 本人发放),收集第一批反馈
 - 试用反馈分类后建 issue 排期
-- 候选:旧约书卷注解扩充评估(数据源、API 成本、工作量,先出方案再定)
+- 旧约注解扩充:方案已出(CAO-20,三批 ≈$2.4、1-2 工作日),待 owner 拍板是否执行
 - 候选:`AGENTS.md` 规范在 Multica 小队 instructions 同步(已同步,2026-07-31)

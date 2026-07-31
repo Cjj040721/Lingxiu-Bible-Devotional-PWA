@@ -34,59 +34,47 @@ npm run build:verses     # 从圣经数据生成每日金句 src/data/daily-vers
 node scripts/generate-icons.mjs   # 重新生成 PWA 占位图标
 ```
 
-## 部署（Vercel，方案 A）
+## 部署（Cloudflare Workers，生产环境）
 
-前端托管在 Vercel，AI 代理由 `api/ask.js`（Vercel Serverless Function）提供，同域名 `/api/ask`，无需额外网关。
+生产地址：**<https://lingxiubible.top>**（Cloudflare 自有域名，国内可直连）。
 
-### 方式一：Git + Vercel 网页导入（推荐）
+> Vercel 方案已弃用：`*.vercel.app` 在国内无法直接访问。`vercel.json` 与 `api/ask.js`（Vercel Serverless 版代理）仅作存档保留，不再维护。
 
-1. 把本目录（`app/`）推到 GitHub/GitLab 仓库
-2. [vercel.com](https://vercel.com) → Add New → Project → 导入该仓库
-3. Vercel 会自动识别 Vite：Build Command `npm run build`，Output `dist`（保持默认即可）
-4. Deploy。完成后访问分配的域名即可（微信里打开 → 添加到主屏幕）
+架构：**一个 Cloudflare Worker 同时承担 ① 托管 `dist/` 静态前端（Workers Static Assets）② `/api/ask` AI 问答代理**，配置见根目录 `wrangler.toml`，详细部署步骤见 `worker/README.md`。
 
-### 方式二：命令行
+### 日常更新
 
 ```bash
 cd app
-npx vercel          # 首次按提示登录、选择 scope，直接部署预览
-npx vercel --prod   # 发布到生产域名
+npm run build && npx wrangler deploy
 ```
 
-### 必须配置的环境变量（Vercel → Project → Settings → Environment Variables）
+首次部署需 `npx wrangler login`，并用 `npx wrangler secret put OPENAI_API_KEY` 配置大模型 Key（不要写进任何文件）。
 
-| 变量 | 必填 | 默认值 | 说明 |
-|---|---|---|---|
-| `OPENAI_API_KEY` | ✅ | — | 大模型 Key。DeepSeek 申请地址：<https://platform.deepseek.com/api_keys>（注册 → 充值少量金额 → 创建 API Key） |
-| `OPENAI_BASE_URL` | 否 | `https://api.deepseek.com/v1` | OpenAI 兼容接口地址，换别家模型改这里 |
-| `MODEL` | 否 | `deepseek-chat` | 模型名 |
-| `PASSCODE` | 否 | — | 圈子口令；设置后用户需在问答页输入口令才能提问，防止链接外传被刷 |
-| `DAILY_LIMIT` | 否 | `20` | 每 IP 每天提问上限 |
+### 环境变量
 
-> 改完环境变量后要 **Redeploy** 一次才会生效。未配置 `OPENAI_API_KEY` 时，问答页显示「AI 功能待配置」，其余功能不受影响。
+| 变量 | 配置方式 | 必填 | 默认值 | 说明 |
+|---|---|---|---|---|
+| `OPENAI_API_KEY` | `wrangler secret put` | ✅ | — | 大模型 Key。当前用阿里云百炼（DeepSeek 兼容端点），申请：<https://bailian.console.aliyun.com/> |
+| `OPENAI_BASE_URL` | `wrangler.toml` [vars] | 否 | 已配置阿里云兼容端点 | OpenAI 兼容接口地址，换别家模型改这里 |
+| `MODEL` | `wrangler.toml` [vars] | 否 | `deepseek-v3.2` | 模型名 |
+| `PASSCODE` | `wrangler secret put` | 否 | — | 圈子口令；设置后用户需在问答页输入口令才能提问，防止链接外传被刷。**当前未启用**（自用阶段），需要时随时可配，无需改代码 |
+| `DAILY_LIMIT` | `wrangler.toml` [vars] | 否 | `20` | 每 IP 每天提问上限 |
+
+> 改完 `wrangler.toml` 的 [vars] 后要重新 `npx wrangler deploy` 才生效；secret 改完即生效。未配置 `OPENAI_API_KEY` 时，问答页显示「AI 功能待配置」，其余功能不受影响。
 
 ### 路由与 PWA 说明
 
-- `vercel.json` 已配置 SPA 回退：除 `/api/*` 外所有路径回退到 `index.html`（静态资源与 `/api/ask` 不受影响）
-- `vite.config.ts` 中 `base: '/'`，适配 Vercel 根路径部署；PWA Service Worker 全量预缓存（含圣经数据），离线可用
-
-### 备选：Cloudflare Pages + Workers
-
-`worker/ask.js` 保留了 Cloudflare Worker 版代理（SSE 流式，前端同样兼容），部署方式见 `worker/README.md`。
-
-### 备选：GitHub Pages（无 AI）
-
-1. `vite.config.ts` 把 `base` 改为 `'/<仓库名>/'`，重新 build
-2. 把 `dist/` 推到 `gh-pages` 分支
-3. GitHub Pages 无法运行 `/api/ask`，AI 问答需单独部署 Worker 并把 `src/lib/ai.ts` 的 `ASK_ENDPOINT` 改为完整 URL（CORS 已放行）
+- SPA 回退由 `wrangler.toml` 的 `[assets] not_found_handling = "single-page-application"` 处理；`/api/ask` 由 Worker 代码接管
+- `vite.config.ts` 中 `base: '/'`；PWA Service Worker 全量预缓存（含圣经数据），离线可用
 
 ## 配置 AI 问答
 
-代理代码在 `api/ask.js`（Vercel 方案，默认）。环境变量见上表。机制：
+代理代码在 `worker/ask.js`（Cloudflare Worker，生产用；`api/ask.js` 是已弃用的 Vercel 版存档）。环境变量见上表。机制：
 
 - 前端提问前先在本地检索 top 8 相关经文，随问题一起 POST 到 `/api/ask`
 - 代理拼接系统指令（只依据经文与公有领域注解回答、标注出处、争议话题中立、末尾固定免责语）后调用大模型
-- 回答以非流式 JSON 返回（稳妥优先；前端同时兼容 SSE 流，换 Cloudflare Worker 版代理可无缝切换）
+- 回答以 OpenAI 兼容 SSE 流式返回（前端同时兼容非流式 JSON）
 - 对话记录只存用户设备 localStorage，服务器不留存
 
 ## 圣经数据说明

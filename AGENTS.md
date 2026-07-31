@@ -29,6 +29,6 @@
 
 ## 边界(必须 owner 本人拍板,agent 只产出方案与草稿)
 
-1. Vercel 真实部署/发布
+1. 生产部署/发布(Cloudflare Workers,lingxiubible.top;Vercel 方案已弃用)
 2. AI 问答的 `OPENAI_API_KEY` / 圈子口令 `PASSCODE` 配置与额度预算
 3. 对小圈子成员的任何对外承诺(上线时间、口令发放等)

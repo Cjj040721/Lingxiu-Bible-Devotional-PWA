@@ -11,6 +11,7 @@
 
 ## DONE
 
+- 2026-07-31 · 文档定版:部署方案只留 Cloudflare(lingxiubible.top),README 部署章节重写、AGENTS.md 边界条目同步;Vercel 方案标记弃用(`vercel.json`/`api/ask.js` 仅存档);owner 确认自用阶段不启用 PASSCODE · 见本次 docs commit
 - 2026-07-31 · CAO-19 试用前自查:build 通过 + validate:bible 36 项全过;Cloudflare 生产(lingxiubible.top)静态资源/SPA 回退/AI 问答流式全链路 200;发现:① `*.vercel.app` 国内不可达,试用链接须用自有域名 ② Worker 未配置 `PASSCODE`,AI 问答暂无口令保护(是否配置由 owner 决定)
 - 2026-07-31 · 仓库补三件套之 AGENTS.md + LEDGER.md,`.gitignore` 补 `.wrangler`(docs commit,见 git log)
 - 2026-07-31 · 补推尾部 8 卷加深版逐节注解(希伯来书~犹大书,736 条,中位 107 字)——上次推送时重生成未跑完;证据:validate:bible 36 项通过、validate:commentary 58 项通过 · `a140515`

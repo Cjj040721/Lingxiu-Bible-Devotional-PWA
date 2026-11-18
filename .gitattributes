@@ -1,0 +1,4 @@
+*.md linguist-documentation
+docs/** linguist-documentation
+public/data/** linguist-vendored
+scripts/raw/** linguist-vendored

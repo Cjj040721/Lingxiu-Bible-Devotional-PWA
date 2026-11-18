@@ -1,143 +1,166 @@
-# 灵修伴读（Lingxiu Bandu）
+<div align="center">
 
-> 非盈利、给基督徒小圈子（10-100 人）使用的中文圣经阅读 PWA。
-> 微信里打开链接 → 添加到主屏幕，体验接近原生 App。圣经采用公有领域的中文和合本（1919）。
+# Lingxiu Bible — Chinese Devotional PWA
 
-## 功能（V1）
+**Read slowly. Return daily. Reflect with context.**
 
-- 📖 **圣经阅读**：和合本 66 卷完整经文（旧约 39 + 新约 27），卷 → 章 → 经文三级导航；字号 4 档、夜间模式（localStorage 记忆）；左右滑动翻章；跨卷上一章/下一章
-- ✨ **每日金句**：69 节精选经文按日期轮换（从圣经数据原样抽取生成）
-- 🗓️ **读经计划 + 打卡**：一年整本 / 90 天新约 / 30 天福音书；进度条、连续天数 streak、打卡日历（可补打）；数据存本地
-- 🔍 **全文搜索**：关键词搜全部经文，分批加载边搜边出结果，高亮命中，点击跳转
-- ✏️ **笔记与书签**：阅读页点击任一节 → 复制（带出处）/ 书签 / 笔记 / 分享卡片；时间线管理、可导出 JSON
-- 🖼️ **金句卡片**：Canvas 生成分享图（3 套模板），保存 PNG
-- 💬 **AI 灵修问答**：对话式 UI + 快捷提问；前端本地检索相关经文作 RAG 上下文；Cloudflare Worker 代理（Key 不下发、限流、圈子口令）；对话只存本地；**未配置时优雅提示**
-- 📜 **注解框架**：阅读页每章可展开注解区；数据按卷放在 `public/data/commentary/`，没有文件时显示「整理中」
-- 📱 **PWA**：manifest + Service Worker 全量预缓存（含圣经数据），离线可用；添加到主屏幕
+A non-profit, local-first Bible reading and devotional companion for small Chinese-speaking Christian groups. Built around the public-domain Chinese Union Version, reading plans, notes, prayer, and optional scripture-grounded AI conversations.
 
-## 本地开发
+**[English](README.md) · [简体中文](README.zh-CN.md) · [Open the App](https://lingxiubible.top)**
+
+[![Live App](https://img.shields.io/badge/Live_App-lingxiubible.top-4F46E5)](https://lingxiubible.top)
+[![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)](https://react.dev/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-6-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![PWA](https://img.shields.io/badge/PWA-Offline_Ready-5A0FC8)](https://web.dev/learn/pwa/)
+[![Cloudflare Workers](https://img.shields.io/badge/Cloudflare-Workers-F38020?logo=cloudflare&logoColor=white)](https://workers.cloudflare.com/)
+[![Bible Data](https://img.shields.io/badge/Bible-66_Books_Validated-2AA887)](#validation)
+
+[Overview](#overview) · [Features](#features) · [Architecture](#architecture) · [Quick Start](#quick-start) · [Validation](#validation) · [Privacy and Sources](#privacy-and-sources)
+
+</div>
+
+---
+
+<img src="docs/assets/hero.png" alt="Lingxiu Bible home, scripture reading, reading plan, and AI devotional screens" width="100%">
+
+<a id="overview"></a>
+## 1. Overview
+
+Lingxiu Bible (灵修伴读) is designed for groups of roughly **10–100 people** who want a lightweight devotional tool that works inside WeChat or a mobile browser. Add it to the home screen and it behaves like an installable app, including offline access to the complete Bible data.
+
+The product is intentionally focused: no accounts, no social feed, no server-side conversation history, and no commercialisation. Reading progress, bookmarks, notes, prayer items, and AI conversations stay on the user's device.
+
+> **Project boundary:** Non-commercial, small-group use only. It is not an App Store product and is not intended to replace pastoral guidance.
+
+<a id="features"></a>
+## 2. Product Features
+
+| Capability | Delivered behavior |
+|---|---|
+| **Complete Bible reading** | Chinese Union Version with 66 books, 1,189 chapters, book/chapter/verse navigation, four font sizes, dark mode, and chapter gestures |
+| **Offline PWA** | Manifest and service worker precache the app and Bible data for home-screen installation and offline reading |
+| **Reading plans** | One-year Bible, 90-day New Testament, and 30-day Gospels plans with progress, streaks, calendar check-ins, and backfilling |
+| **Search and notes** | Full-text search with highlighted matches, verse bookmarks, notes, a timeline, and JSON export |
+| **Verse cards** | Three Canvas-based share-card templates with PNG export and source references |
+| **Prayer companion** | Guided prayer, timing, and a local prayer list alongside the reading workflow |
+| **Public-domain commentary** | Chapter and verse-level material derived from public-domain sources, with coverage validation |
+| **Optional AI devotional Q&A** | Local retrieval of relevant verses, a Cloudflare Worker proxy, streaming responses, source references, rate limits, and an optional group passcode |
+
+AI is an optional layer. If the worker or model is not configured, the reading, plans, notes, prayer, and other local features continue to work.
+
+<a id="architecture"></a>
+## 3. Architecture
+
+```text
+React 19 + TypeScript + Vite PWA
+│
+├── Local Bible and commentary data
+├── localStorage
+│   ├── Settings and reading plans
+│   ├── Notes, bookmarks, and prayer items
+│   └── AI conversations
+│
+└── Optional AI request
+    ├── Retrieve up to 8 relevant verses in the browser
+    ├── POST question + context to /api/ask
+    ├── Cloudflare Worker adds instructions and limits
+    ├── OpenAI-compatible model endpoint
+    └── Streaming response; no API key exposed to the browser
+```
+
+One Cloudflare Worker serves the built static assets and handles `/api/ask`. The older Vercel proxy is retained only as an archived implementation; Cloudflare Workers is the maintained deployment path.
+
+## 4. Quick Start
+
+### Requirements
+
+- Node.js 22 or a compatible current LTS release
+- npm
+- No API key for the local reading application
 
 ```bash
-cd app
-npm install          # 首次
-npm run dev          # 开发服务器（默认 http://localhost:5173）
-npm run build        # 产物到 dist/（含 PWA）
-npm run preview      # 本地预览构建产物
+git clone https://github.com/Cjj040721/lingxiu-bible.git
+cd lingxiu-bible
+npm ci
+npm run dev
 ```
 
-常用数据脚本：
+Open the local URL printed by Vite, normally `http://localhost:5173`.
+
+Production build and preview:
 
 ```bash
-npm run convert:bible    # 原始和合本 JSON → public/data/bible/（按卷拆分 + 索引）
-npm run validate:bible   # 数据完整性校验（66 卷/1189 章/31100 节位 + 25 处关键经文抽检）
-npm run build:verses     # 从圣经数据生成每日金句 src/data/daily-verses.json
-node scripts/generate-icons.mjs   # 重新生成 PWA 占位图标
+npm run build
+npm run preview
 ```
 
-## 部署（Cloudflare Workers，生产环境）
-
-生产地址：**<https://lingxiubible.top>**（Cloudflare 自有域名，国内可直连）。
-
-> Vercel 方案已弃用：`*.vercel.app` 在国内无法直接访问。`vercel.json` 与 `api/ask.js`（Vercel Serverless 版代理）仅作存档保留，不再维护。
-
-架构：**一个 Cloudflare Worker 同时承担 ① 托管 `dist/` 静态前端（Workers Static Assets）② `/api/ask` AI 问答代理**，配置见根目录 `wrangler.toml`，详细部署步骤见 `worker/README.md`。
-
-### 日常更新
+Useful data commands:
 
 ```bash
-cd app
-npm run build && npx wrangler deploy
+npm run convert:bible
+npm run validate:bible
+npm run build:verses
+npm run validate:commentary
 ```
 
-首次部署需 `npx wrangler login`，并用 `npx wrangler secret put OPENAI_API_KEY` 配置大模型 Key（不要写进任何文件）。
+For Cloudflare configuration, model settings, rate limits, and deployment details, see the [Chinese documentation](README.zh-CN.md) and [`worker/README.md`](worker/README.md). **Never commit `.env.local` or real API keys.** Production deployment is outside the quick-start flow.
 
-### 环境变量
+<a id="validation"></a>
+## 5. Validation
 
-| 变量 | 配置方式 | 必填 | 默认值 | 说明 |
-|---|---|---|---|---|
-| `OPENAI_API_KEY` | `wrangler secret put` | ✅ | — | 大模型 Key。当前用阿里云百炼（DeepSeek 兼容端点），申请：<https://bailian.console.aliyun.com/> |
-| `OPENAI_BASE_URL` | `wrangler.toml` [vars] | 否 | 已配置阿里云兼容端点 | OpenAI 兼容接口地址，换别家模型改这里 |
-| `MODEL` | `wrangler.toml` [vars] | 否 | `deepseek-v3.2` | 模型名 |
-| `PASSCODE` | `wrangler secret put` | 否 | — | 圈子口令；设置后用户需在问答页输入口令才能提问，防止链接外传被刷。**当前未启用**（自用阶段），需要时随时可配，无需改代码 |
-| `DAILY_LIMIT` | `wrangler.toml` [vars] | 否 | `20` | 每 IP 每天提问上限 |
+The current documentation update was checked against the real application:
 
-> 改完 `wrangler.toml` 的 [vars] 后要重新 `npx wrangler deploy` 才生效；secret 改完即生效。未配置 `OPENAI_API_KEY` 时，问答页显示「AI 功能待配置」，其余功能不受影响。
+| Check | Result |
+|---|---|
+| `npm run build` | Passed; PWA precache generated for 214 entries |
+| `npm run lint` | **0 errors**, 4 existing warnings in `settings.tsx` and `ai.ts` |
+| `npm run validate:bible` | **36 checks passed**; 66 books / 1,189 chapters / 31,100 verse positions / 31,032 entries |
+| `npm run validate:commentary` | **132 checks passed**; 66 books and 4,050 chapter sections |
+| Browser walkthrough | Home, John 3 reading, active reading plan, search, and AI page captured locally with no browser console errors |
 
-### 路由与 PWA 说明
+The screenshots in `docs/assets/` were taken from the local Vite application, not mockups.
 
-- SPA 回退由 `wrangler.toml` 的 `[assets] not_found_handling = "single-page-application"` 处理；`/api/ask` 由 Worker 代码接管
-- `vite.config.ts` 中 `base: '/'`；PWA Service Worker 全量预缓存（含圣经数据），离线可用
+## 6. Repository Structure
 
-## 配置 AI 问答
-
-代理代码在 `worker/ask.js`（Cloudflare Worker，生产用；`api/ask.js` 是已弃用的 Vercel 版存档）。环境变量见上表。机制：
-
-- 前端提问前先在本地检索 top 8 相关经文，随问题一起 POST 到 `/api/ask`
-- 代理拼接系统指令（只依据经文与公有领域注解回答、标注出处、争议话题中立、末尾固定免责语）后调用大模型
-- 回答以 OpenAI 兼容 SSE 流式返回（前端同时兼容非流式 JSON）
-- 对话记录只存用户设备 localStorage，服务器不留存
-
-## 圣经数据说明
-
-- 来源：[xucz1109/bible-zh-cuvs](https://github.com/xucz1109/bible-zh-cuvs)（上游 [haitai/bible](https://github.com/haitai/bible)），简体和合本，公有领域
-- 已做严格清洗与交叉验证：
-  - 与独立繁体数据源（thiagobodruk/bible）+ wordproject.org 在线和合本逐章比对
-  - 和合本印刷版的「合节」（多节合并，如 诗8:6-8、弗6:2-3）以区间格式 `{v, end, t}` 保留
-  - 源数据唯一一处真实缺文（约书亚记 3:10-11）已依 wordproject.org 补回
-  - `npm run validate:bible` 全量校验：66 卷 / 1189 章 / 31100 节位 / 31032 条目 + 25 处关键经文 + 简体确认
-- 格式：`public/data/bible/index.json`（卷索引）+ `books/{bookId}.json`（单卷，按需加载）
-
-```jsonc
-// books/gen.json
-{ "bookId": "gen", "name": "创世记", "abbr": "创", "testament": "old", "order": 1,
-  "chapters": [ { "chapter": 1, "verses": [ { "v": 1, "t": "起初神创造天地。" } ] } ] }
-// 合节示例：{ "v": 6, "end": 8, "t": "……" } 表示 6-8 节合并
-```
-
-## 注解数据格式
-
-文件：`public/data/commentary/{bookId}.json`（没有该文件的卷显示「整理中」）
-
-```jsonc
-{ "bookId": "mat", "source": "马太亨利简明圣经注释（1706 年原著，公有领域）· AI 中译",
-  "chapters": [ { "chapter": 5, "sections": [ { "verses": "1-12", "text": "……" } ] } ] }
-```
-
-内容来源：马太亨利简明圣经注释（MHCC，1706 年原著，公有领域）英文原文，经 AI 批量翻译为简体中文（术语对齐和合本）。覆盖范围：全本 66 卷（V1 为新约 27 卷 + 诗篇 + 箴言，CAO-20 扩充旧约其余 37 卷）。另有 `public/data/commentary-verses/` 逐节简注（依据 MHCC 中译 + 经文由 AI 生成，含义/见解/应用三段式）。
-
-数据管道（详见 `scripts/raw/mhcc/SOURCE.md`）：
-1. `npm run convert:commentary` — 解析 MHCC 英文原文（`scripts/raw/mhcc/src/`）→ 英文中间数据 `scripts/raw/commentary-en/`
-2. `npm run translate:commentary` — 调 OpenAI 兼容接口（默认 DeepSeek）翻译 → `public/data/commentary/`（需 `.env.local` 配置 `OPENAI_API_KEY`，支持断点续传）
-3. `npm run validate:commentary` — 校验章号连续、verses 格式、text 非空、单卷 < 500KB
-
-## 目录结构
-
-```
-app/
-├── public/
-│   ├── data/bible/          # 圣经数据（index.json + books/*.json，PWA 预缓存）
-│   ├── data/commentary/     # 注解数据（预留，按卷）
-│   ├── icons/               # PWA 图标（脚本生成）
-│   └── favicon.svg
+```text
+lingxiu-bible/
 ├── src/
-│   ├── components/          # TabBar / Modal / 选节操作菜单 / 卡片弹窗
-│   ├── data/daily-verses.json  # 每日金句（脚本生成）
-│   ├── lib/                 # bible(数据访问) settings plans marks search ai card commentary store
-│   ├── pages/               # Home Books Chapters Read Search Plans Notes Ask
-│   ├── types/bible.ts
-│   ├── App.tsx / main.tsx / index.css
-│   └── index.html（项目根）
-├── scripts/                 # 数据管道：convert/validate/compare/icons/verses（node 直接运行）
-├── worker/                  # Cloudflare Worker：AI 问答代理 + 部署说明
-├── vite.config.ts           # Vite + Tailwind + PWA 配置
-└── README.md
+│   ├── components/          # Navigation, modals, and verse cards
+│   ├── data/                # Daily verse selection
+│   ├── lib/                 # Bible, plans, notes, prayer, search, AI, and storage
+│   ├── pages/               # Home, books, reading, plans, prayer, notes, search, and AI
+│   └── types/               # Bible data types
+├── public/
+│   ├── data/bible/          # Complete Bible data
+│   ├── data/commentary/     # Chapter commentary
+│   └── icons/               # PWA icons
+├── scripts/                 # Conversion, validation, comparison, and generation pipelines
+├── worker/                  # Cloudflare AI proxy and deployment guide
+├── docs/assets/             # Real application screenshots and README hero
+├── README.md                # English product overview
+└── README.zh-CN.md          # Detailed Chinese setup, deployment, and data guide
 ```
 
-本地存储键位（localStorage）：`lingxiu.settings.v1`（字号/夜间）、`lingxiu.plan.v1`（计划/打卡）、`lingxiu.marks.v1`（笔记/书签）、`lingxiu.chats.v1`（AI 对话）、`lingxiu.ask.passcode`。
+<a id="privacy-and-sources"></a>
+## 7. Privacy, Content, and Compliance
 
-## 合规与版权
+- **Bible text:** Chinese Union Version (1919), public domain. Source and validation details are documented in the [Chinese guide](README.zh-CN.md).
+- **Commentary:** Public-domain source material only; translation and generation provenance is recorded in the data pipeline.
+- **Local data:** Settings, progress, notes, bookmarks, prayer items, and conversations remain in local storage.
+- **AI requests:** A question and retrieved context are sent to the configured model provider only when the user actively uses AI Q&A.
+- **Pastoral boundary:** AI answers include a reference-only disclaimer and are not a substitute for pastoral care.
+- Third-party sources retain their original terms. No new licence is claimed for third-party Bible, commentary, or reference content.
 
-- 圣经：和合本（1919），公有领域 ✅
-- 注解：仅收录公有领域释经资料（马太亨利等），收录前核对所用中译本版权状态
-- AI 回答：固定带「仅供参考，请与牧者交通」免责；经圈子口令 + 限流控制使用范围
-- 仅小圈子分享链接使用，不公开推广、不上架应用商店
+## 8. Author and Status
+
+Built and maintained by **Cao Junjia**. The deployed app and complete local reading workflow are available; continued work focuses on content quality, interaction polish, and small-group use rather than commercial distribution.
+
+---
+
+<div align="center">
+
+**Lingxiu Bible — A small daily rhythm of Scripture, reflection, and prayer.**
+
+React + TypeScript + PWA + Cloudflare Workers
+
+</div>

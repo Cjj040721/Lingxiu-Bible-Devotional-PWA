@@ -114,7 +114,7 @@ npm run build && npx wrangler deploy
 ## 目录结构
 
 ```
-lingxiu-bible/
+Lingxiu-Bible-Devotional-PWA/
 ├── public/
 │   ├── data/bible/          # 圣经数据（index.json + books/*.json，PWA 预缓存）
 │   ├── data/commentary/     # 注解数据（预留，按卷）

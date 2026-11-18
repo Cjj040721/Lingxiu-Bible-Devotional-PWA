@@ -79,8 +79,8 @@ One Cloudflare Worker serves the built static assets and handles `/api/ask`. The
 - No API key for the local reading application
 
 ```bash
-git clone https://github.com/Cjj040721/lingxiu-bible.git
-cd lingxiu-bible
+git clone https://github.com/Cjj040721/Lingxiu-Bible-Devotional-PWA.git
+cd Lingxiu-Bible-Devotional-PWA
 npm ci
 npm run dev
 ```
@@ -123,7 +123,7 @@ The screenshots in `docs/assets/` were taken from the local Vite application, no
 ## 6. Repository Structure
 
 ```text
-lingxiu-bible/
+Lingxiu-Bible-Devotional-PWA/
 ├── src/
 │   ├── components/          # Navigation, modals, and verse cards
 │   ├── data/                # Daily verse selection
